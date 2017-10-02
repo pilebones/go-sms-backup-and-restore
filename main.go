@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +19,17 @@ type XMLSMSes struct {
 	BackupSet  string   `xml:"backup_set,attr"`
 	BackupDate string   `xml:"backup_date,attr"`
 	SMSes      []XMLSMS `xml:"sms"`
+}
+
+type Status string
+
+func (s Status) IsNull() bool {
+	return s == "null"
+}
+
+func (s Status) Code() (int, error) {
+	i, err := strconv.ParseInt(string(s), 10, 0)
+	return int(i), err
 }
 
 type XMLSMS struct {
@@ -33,7 +45,7 @@ type XMLSMS struct {
 	Number        string   `xml:"number,attr"`
 	ServiceCenter string   `xml:"service_center,attr"`
 	Read          bool     `xml:"read,attr"`
-	Status        int      `xml:"status,attr"`
+	Status        Status   `xml:"status,attr"`
 	Locked        bool     `xml:"locked,attr"`
 	DateSent      int      `xml:"date_sent,attr"`
 	ReadableDate  string   `xml:"readable_date,attr"`
@@ -51,18 +63,23 @@ func main() {
 	phoneNumber := flag.String("phonenumber", "0600000000", "Filter messages with this phone number")
 	flag.Parse()
 
+	if phoneNumber == nil {
+		log.Println("No phone number provided, abort")
+		os.Exit(1)
+	}
+
 	// Build the location of the sms.xml file
 	// filepath.Abs appends the file name to the default working directly
 	smsesFilePath, err := filepath.Abs(*input)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Unable to get absolute path of input file, err:", err)
 		os.Exit(1)
 	}
 
 	// Open the smses.xml file
 	file, err := os.Open(smsesFilePath)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Unable to open input file, err:", err)
 		os.Exit(1)
 	}
 
@@ -73,7 +90,7 @@ func main() {
 	// Read the straps file
 	xmlSMSes, err := ReadSMSes(file)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Unable to read input file, err:", err)
 		os.Exit(1)
 	}
 
@@ -87,8 +104,10 @@ func main() {
 			SMSes:      make([]XMLSMS, 0),
 		}
 
+		log.Println("Filter with", NormalizePhoneNumber(*phoneNumber), "as phone number")
+
 		for _, sms := range xmlSMSes.SMSes {
-			if NormalizePhoneNumber(sms.Address) == *phoneNumber {
+			if NormalizePhoneNumber(sms.Address) == NormalizePhoneNumber(*phoneNumber) {
 				smsesKeep.SMSes = append(smsesKeep.SMSes, sms)
 			}
 		}
